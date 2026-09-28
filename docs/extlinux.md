@@ -77,8 +77,9 @@ label postmarketOS
 ```
 
 The explicit `fdt` line can instead be `fdtdir /dtbs` when the packaged/live
-identity is correct. Config discovery and payload resolution are not proof
-of a successful kexec handoff; see [Ferrari bring-up](ferrari-bringup.md).
+identity is correct. A successful kexec handoff also requires a working
+platform CPU shutdown/restart protocol and a target kernel that supports the
+hardware; config discovery and payload resolution alone do not establish that.
 
 [lk2nd-doc]: https://github.com/msm8916-mainline/lk2nd/blob/8b46487c4c76776c4f2f61468d44a74c69e6b9ea/Documentation/boot.md
 [lk2nd-parser]: https://github.com/msm8916-mainline/lk2nd/blob/8b46487c4c76776c4f2f61468d44a74c69e6b9ea/lk2nd/boot/extlinux.c
