@@ -1,4 +1,15 @@
-# MSM8916 preboot
+# Qualcomm MSM8916/MSM8939 preboot
+
+The same resident ABI drives MSM8939's two Cortex-A53 clusters. Parking slots
+are indexed densely instead of by raw MPIDR: Aff1 selects the cluster and Aff0
+the core, so `index = Aff1 * 4 + Aff0` (0..7) and the resident descriptor CPU
+count is `num_possible_cpus()` (4 or 8). The primary is whichever CPU the
+firmware boots: MPIDR 0 on MSM8916, but MPIDR 0x100 (big-cluster core 0) on
+MSM8939, so preboot must not assume MPIDR 0 and slot 0 is a normal secondary
+there. The kernel's `pb_index()` and the cache-off resident trampoline compute
+the same index. The Xiaomi Mi 4i (ferrari) overlay labels all eight CPUs
+`pocketboot,msm8939-acc` and reserves the same 4 KiB `pocketboot,spin-table-v1`
+page; see [the MSM8939 patch README](../patches/kernel/msm8939/README.md).
 
 For UART-free lab diagnostics, see the optional
 [triplicated RAM trace](../docs/preboot-ram-trace.md).
@@ -68,8 +79,11 @@ Host checks and a freestanding build require no network access:
 
 ```sh
 cargo test --offline -p pocketpreboot --features soc-msm8916
+cargo test --offline -p pocketpreboot --features soc-msm8939
 cargo build --offline --release --target aarch64-unknown-none -p pocketpreboot \
   --features device-msm8916-samsung-a5u-eur
+cargo build --offline --release --target aarch64-unknown-none -p pocketpreboot \
+  --features device-msm8939-xiaomi-ferrari
 ```
 
 Host tests cover FDT parsing/rewriting, ABI geometry and rejection, CPU topology,
