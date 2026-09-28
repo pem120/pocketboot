@@ -50,6 +50,9 @@ const DEFAULT_DEVICE_DETAIL: &str = "LinuxBoot environment";
 
 fn main() {
     if let Err(err) = runtime::block_on(run()) {
+        // PID 1 exiting is an unrecoverable kernel panic. Keep the reason in the
+        // kernel log so a UART-free capture (ramoops/pstore) still has it.
+        tracing::error!(error = %err, "pocketboot startup failed");
         println!("pocketboot error: {}", err);
         thread::sleep(Duration::from_secs(1));
     }
@@ -233,7 +236,10 @@ async fn run_boot_coordinator(
                     source = %entry.source.display(),
                     "booting UI-selected entry"
                 );
-                return boot_discovered_entry(entry);
+                match boot_discovered_entry(entry) {
+                    Ok(()) => return Ok(()),
+                    Err(err) => report_boot_failure(err),
+                }
             }
             CoordinatorEvent::Fastboot(result) => {
                 let action = result?;
@@ -245,12 +251,16 @@ async fn run_boot_coordinator(
                 }
 
                 if discovery_complete {
-                    boot_default_entry(&boot_entries)?;
-                    return Ok(());
+                    match boot_default_entry(&boot_entries) {
+                        Ok(()) => return Ok(()),
+                        Err(err) => report_boot_failure(err),
+                    }
+                } else {
+                    tracing::info!(
+                        "fastboot exited; waiting for boot discovery before default boot"
+                    );
+                    fastboot_requested_default = true;
                 }
-
-                tracing::info!("fastboot exited; waiting for boot discovery before default boot");
-                fastboot_requested_default = true;
             }
             CoordinatorEvent::DiscoveryUpdate(entries) => {
                 apply_boot_entries_update(
@@ -271,10 +281,16 @@ async fn run_boot_coordinator(
                     true,
                 );
                 if fastboot_requested_default {
-                    boot_default_entry(&boot_entries)?;
-                    return Ok(());
+                    match boot_default_entry(&boot_entries) {
+                        Ok(()) => return Ok(()),
+                        Err(err) => {
+                            report_boot_failure(err);
+                            fastboot_requested_default = false;
+                        }
+                    }
+                } else {
+                    tracing::info!("boot discovery complete; holding for fastboot or UI selection");
                 }
-                tracing::info!("boot discovery complete; holding for fastboot or UI selection");
             }
         }
     }
@@ -355,6 +371,12 @@ fn log_boot_entries(entries: &[bootflow::BootEntry]) {
             );
         }
     }
+}
+
+/// A failed handoff must leave pocketboot running: PID 1 exiting panics the
+/// kernel and reboots the device before anyone can read the reason.
+fn report_boot_failure(err: String) {
+    tracing::error!(error = %err, "boot attempt failed; returning to the boot menu");
 }
 
 fn boot_default_entry(boot_entries: &[bootflow::BootEntry]) -> Result<()> {
