@@ -36,10 +36,15 @@ in the repository root is not this build's output.
 
 ## Known kexec blocker
 
+There are two source-confirmed barriers in the current no-preboot configuration:
+userspace first rejects the unowned lk2nd table with
+`live spin-table CPUs have no owned parking contract`. Independently, the
+kernel also lacks the CPU-shutdown support needed to perform a safe handoff.
+
 The current DT uses lk2nd-owned `spin-table` for eight CPUs. In the pinned
 kernel, the spin-table CPU operations do not provide `cpu_die`; with more than
 one possible CPU, `cpus_are_stuck_in_kernel()` returns true.
-`machine_kexec_prepare()` therefore rejects the legacy kexec load with
+If reached, `machine_kexec_prepare()` rejects the legacy kexec load with
 `-EBUSY` ("Can't kexec: CPUs are stuck in the kernel").
 
 This is a source-confirmed limitation of the current configuration, not a
@@ -49,6 +54,12 @@ force a handoff. Safe CPU shutdown/parking, second-kernel startup and retained
 memory ownership need a focused follow-up. The experimental parking code
 retained in this tree is not evidence that that path works on Ferrari.
 Track the investigation in [pem120/linux#3](https://github.com/pem120/linux/issues/3).
+
+The userspace DTB graft supports the experimental eight-CPU contract, including
+dense release slots and physical boot CPU 0x100. That only removes the old
+four-core-only loader restriction when a valid pocketboot-owned parking contract
+already exists. It does not adopt lk2nd's resident memory, enable the shim/kernel
+patch, prove CPU parking, or bypass either ownership or kernel safety checks.
 
 ## Hardware acceptance
 
