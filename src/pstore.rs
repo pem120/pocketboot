@@ -46,10 +46,6 @@ fn mount_store() -> io::Result<bool> {
     }
     fs::create_dir_all(STORE)?;
     let path = cstring(Path::new(STORE))?;
-    let mut stat = std::mem::MaybeUninit::<libc::statfs>::uninit();
-    if unsafe { libc::statfs(path.as_ptr(), stat.as_mut_ptr()) } != 0 {
-        return Err(io::Error::last_os_error());
-    }
     let already_mounted = store_magic(&path)? == PSTORE_MAGIC;
     // Even a pre-existing pstore mount must have the recovery mount's protections.
     let flags = MOUNT_FLAGS | if already_mounted { libc::MS_REMOUNT } else { 0 };
@@ -71,9 +67,6 @@ fn mount_store() -> io::Result<bool> {
         return Err(error);
     }
     // Never copy an ordinary directory just because a mount appeared to succeed.
-    if unsafe { libc::statfs(path.as_ptr(), stat.as_mut_ptr()) } != 0 {
-        return Err(io::Error::last_os_error());
-    }
     if store_magic(&path)? != PSTORE_MAGIC {
         return Err(io::Error::other("mount is not a pstore filesystem"));
     }
