@@ -35,6 +35,14 @@ pub(crate) fn init_tracing(cmdline: &KernelCommandLine) {
             .with(level)
             .with(layer)
             .try_init();
+
+        // A panic would otherwise only reach stderr, which a UART-free capture
+        // does not retain. Route it through the kernel log as well.
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            tracing::error!(panic = %info, "pocketboot panicked");
+            previous(info);
+        }));
     });
 }
 
