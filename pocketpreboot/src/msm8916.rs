@@ -2487,17 +2487,3 @@ mod tests {
         write_be32_vec(structure, FDT_END_NODE);
     }
 }
-
-#[cfg(test)]
-mod tmp_dump {
-    use super::*;
-    #[test]
-    fn dump_patched_dtb() {
-        let data = std::fs::read("/tmp/opencode/in.dtb").unwrap();
-        let reader = Reader::new(&data).unwrap();
-        let table = find_spin_table(&reader).unwrap();
-        let mut out = vec![0u8; 512 * 1024];
-        let patched = patch_fdt(&reader, &mut out, table).unwrap();
-        std::fs::write("/tmp/opencode/out.dtb", patched).unwrap();
-    }
-}

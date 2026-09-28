@@ -7,9 +7,12 @@ count is `num_possible_cpus()` (4 or 8). The primary is whichever CPU the
 firmware boots: MPIDR 0 on MSM8916, but MPIDR 0x100 (big-cluster core 0) on
 MSM8939, so preboot must not assume MPIDR 0 and slot 0 is a normal secondary
 there. The kernel's `pb_index()` and the cache-off resident trampoline compute
-the same index. The Xiaomi Mi 4i (ferrari) overlay labels all eight CPUs
-`pocketboot,msm8939-acc` and reserves the same 4 KiB `pocketboot,spin-table-v1`
-page; see [the MSM8939 patch README](../patches/kernel/msm8939/README.md).
+the same index. This MSM8939 path is experimental and is not enabled in the
+Xiaomi Mi 4i (ferrari) build: its overlay uses lk2nd-owned `spin-table` CPUs
+without a pocketboot parking reservation. Enabling the experimental path would
+require `pocketboot,msm8939-acc` CPU methods, the 4 KiB
+`pocketboot,spin-table-v1` page, preboot packaging, and the matching kernel
+patch; see [the MSM8939 patch README](../patches/kernel/msm8939/README.md).
 
 For UART-free lab diagnostics, see the optional
 [triplicated RAM trace](../docs/preboot-ram-trace.md).
