@@ -46,6 +46,8 @@ pocketboot_spin_table_start:
     // secondary that must park. The primary never executes this code.
     ubfx    x11, x10, #32, #8
     cbnz    x11, .Lhalt
+    ubfx    x11, x10, #16, #8
+    cbnz    x11, .Lhalt
     lsr     x11, x10, #8
     and     x11, x11, #0xff
     cmp     x11, #PB_SPIN_TABLE_CPUS / 4
