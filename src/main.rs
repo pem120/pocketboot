@@ -21,6 +21,7 @@ mod kmsg;
 mod kmsg_forwarder;
 mod pe;
 mod power;
+mod pstore;
 #[cfg(feature = "qemu")]
 mod qemu;
 mod reaper;
@@ -68,6 +69,7 @@ async fn run() -> Result<()> {
 
     kmsg::init_tracing(&cmdline);
     tracing::info!("starting up");
+    pstore::capture();
     reaper::spawn();
     getty::spawn(&cmdline);
 
