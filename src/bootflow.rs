@@ -1585,7 +1585,7 @@ fn parse_bls_file(
         initrds.push(path);
     }
 
-    let dtb = bls_dtb_path(root, source, &bls, context)?;
+    let dtb = bls_dtb_path(root, source, &bls, context, read_fdt_compatibles)?;
     if dtb.is_none() && bls.requires_dtb() {
         return Ok(None);
     }
@@ -1627,6 +1627,7 @@ fn bls_dtb_path(
     source: &Path,
     bls: &BlsSnippet,
     context: &BlsContext,
+    read_compatibles: impl FnOnce() -> io::Result<Vec<String>>,
 ) -> io::Result<Option<PathBuf>> {
     if let Some(devicetree) = bls
         .devicetree
@@ -1648,7 +1649,7 @@ fn bls_dtb_path(
         return Ok(None);
     }
 
-    let compatibles = match read_fdt_compatibles() {
+    let compatibles = match read_compatibles() {
         Ok(compatibles) => compatibles,
         Err(err) => {
             tracing::warn!(source = %source.display(), identity_path = FDT_MAINLINE_COMPATIBLE_PATH, fallback_path = FDT_COMPATIBLE_PATH, error = ?err, "cannot resolve BLS fdtdir without packaged or live FDT compatibles");
@@ -2836,6 +2837,36 @@ mod tests {
         let generic_index = candidates.iter().position(|path| path == &generic).unwrap();
 
         assert!(board_index < generic_index);
+    }
+
+    #[test]
+    fn bls_fdtdir_preserves_board_layout_precedence_over_generic_soc() {
+        let root = temp_root("bls-fdtdir-layouts");
+        let dtbs = root.join("dtbs");
+        fs::create_dir_all(dtbs.join("qcom")).unwrap();
+        let layouts = [
+            "qcom/msm8939-xiaomi-ferrari.dtb",
+            "qcom-msm8939-xiaomi-ferrari.dtb",
+            "msm8939-xiaomi-ferrari.dtb",
+            "qcom/msm8939.dtb",
+        ];
+        for path in layouts {
+            fs::write(dtbs.join(path), b"dtb").unwrap();
+        }
+        let bls = BlsSnippet::parse("fdtdir /dtbs\n");
+        for expected in layouts {
+            let selected = bls_dtb_path(
+                &root,
+                &root.join("loader/entries/pmos.conf"),
+                &bls,
+                &BlsContext::default(),
+                || Ok(vec!["xiaomi,ferrari".into(), "qcom,msm8939".into()]),
+            )
+            .unwrap();
+            assert_eq!(selected, Some(dtbs.join(expected)));
+            fs::remove_file(dtbs.join(expected)).unwrap();
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
