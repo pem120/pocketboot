@@ -55,14 +55,23 @@ kernel parked secondaries in its owned page with acknowledgements, and a
 It is a bring-up result, not a coherency soak: no cross-cluster workload, no
 migration or shared-memory check, and no repeated handoff has been recorded yet.
 
+### Repeat boot and cold reclaim
+
+The device was rebooted and booted again successfully, and the destination
+reports `nproc` = 8. The second boot is the interesting one: preboot starts
+against the page retained from the first boot, so it takes the cold path that
+reclaims an occupied reservation only while ACC holds every secondary in reset.
+That branch previously left MSM8916 hardware unable to boot until the stale
+signatures were cleared. It now succeeds on Ferrari.
+
 Still outstanding, and required before calling this accepted:
 
-1. Destination-side device state (display, touch, USB) and any errors observed
-   during handoff.
-2. Repeat boots, including the cold path that reclaims the retained resident
-   page after reset.
-3. A cross-cluster/coherency check in the destination, and repeated handoffs.
-4. For the record: the live DTB/`/proc/iomem` review described below. One boot
+1. Destination display: the install's DTB carries the `xiaomi,ferrari-panel`
+   placeholder, which lk2nd would normally resolve from the detected panel. It
+   never sees this DTB, so no panel driver matches. See the display section
+   below. Touch and USB state in the destination are unrecorded.
+2. A cross-cluster/coherency check in the destination, and repeated handoffs.
+3. For the record: the live DTB/`/proc/iomem` review described below. Two boots
    exercised the page successfully, but preboot's own validation is not a
    substitute for reviewing the live memory map.
 
@@ -167,6 +176,37 @@ attempted.
 Use [recovery diagnostics](recovery.md) to collect failures. Target-DTB ramoops
 layout preservation is still separate work, so retain the raw lk2nd recovery
 route and do not assume every destination-kernel crash is captured.
+
+## Destination display: the panel-compatible fixup
+
+lk2nd resolves the fitted panel and rewrites the placeholder compatible in the
+DTB of the image it boots (`lk2nd/device/panel.c`, `lk2nd,panel` device entry).
+For Ferrari its device DT maps the GCDB panel node to a real mainline
+compatible:
+
+```dts
+xiaomi-ferrari {
+        lk2nd,match-panel;
+        panel {
+                compatible = "xiaomi,ferrari-panel", "lk2nd,panel";
+                qcom,mdss_dsi_sharp_rsp61322_1080p_video { compatible = "xiaomi,sharp-rsp61322"; };
+                qcom,mdss_dsi_jdi_nt35595_1080p_video     { compatible = "xiaomi,jdi-nt35595"; };
+        };
+};
+```
+
+In this chain lk2nd only ever sees **our** boot image's DTB, which has no panel
+node, so the fixup has nothing to rewrite. Pocketboot then hands the install's
+DTB - still holding the placeholder - to the destination kernel, where no panel
+driver matches.
+
+Candidate fix, keeping lk2nd as the only source of panel truth: give the
+Ferrari overlay a placeholder panel node so lk2nd resolves it in the live tree,
+then carry the resolved compatible from the live DTB into the destination DTB
+during the kexec graft, the same way `/memory` and the spin-table contract are
+already grafted. A self-contained alternative is parsing the panel identity and
+carrying lk2nd's mapping table in the device config, at the cost of duplicating
+that table.
 
 ## Known limitation: `fastboot boot` of these images
 
