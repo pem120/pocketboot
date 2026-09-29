@@ -949,6 +949,15 @@ mod tests {
         assert!(overlay.contains("no-map;"));
         assert!(!bootimg.cmdline.contains("spin-table=force"));
         assert!(!bootimg.cmdline.contains("pass-ramoops=zap"));
+        for argument in ["lk2nd.pass-ramoops", "panic=1", "pocketboot.log=info"] {
+            assert!(
+                bootimg
+                    .cmdline
+                    .split_ascii_whitespace()
+                    .any(|arg| arg == argument),
+                "missing experiment diagnostic argument {argument}"
+            );
+        }
     }
 
     #[test]
