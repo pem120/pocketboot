@@ -2,7 +2,7 @@
 
 This branch enables **unvalidated experimental CPU startup and handoff** for
 the Xiaomi Mi 4i (MSM8939). It stacks above the
-[recovery layer](https://github.com/samcday/pocketboot/pull/39), leaving the
+[recovery layer](https://github.com/samcday/pocketboot/pull/42), leaving the
 [no-preboot baseline](https://github.com/samcday/pocketboot/pull/37) available.
 Successful compilation is not permission to flash it. Coordinate transient
 boot tests with the device owner after the memory-map gate below.
