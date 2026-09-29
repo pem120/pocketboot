@@ -32,6 +32,9 @@ Unlike lk2nd, pocketboot presents all usable entries in its own menu, with the
 preferred entry first and the others in config order. Missing kernels,
 initrds, or requested DTBs exclude an entry with a diagnostic; other entries
 remain available. An invalid default is not silently assigned to another label.
+If the selected default is excluded, none of the surviving entries is marked
+preferred. They remain available for manual selection or the caller's fallback
+policy.
 
 ## Paths and DTBs
 
@@ -39,6 +42,9 @@ Paths starting with `/` are relative to the mounted boot filesystem, not the
 running initramfs. Other paths are relative to the config directory. For example,
 with `extlinux/extlinux.conf`, `/vmlinuz` and `../vmlinuz` both select a file
 at the filesystem root, whereas `vmlinuz` selects `extlinux/vmlinuz`.
+For a symlinked config, this is the directory of the path opened, not the link
+target's directory: `extlinux/extlinux.conf -> /actual.conf` still resolves
+`vmlinuz` to `extlinux/vmlinuz`.
 Absolute symlink targets are also boot-filesystem-relative. Symlinks and `..`
 are resolved, but attempts to walk above the boot filesystem root are rejected.
 Link expansion is bounded to reject loops.
@@ -52,6 +58,11 @@ Board-specific names are tried before generic SoC names. For Ferrari's
 - `qcom/msm8939-xiaomi-ferrari.dtb` (Linux arm64 layout)
 - `qcom-msm8939-xiaomi-ferrari.dtb` (vendor-prefixed flat layout)
 - `msm8939-xiaomi-ferrari.dtb` (boot-deploy's flattened layout)
+
+These board-specific layouts are also supported by BLS `fdtdir`, in the same
+order and ahead of generic SoC filenames. An extlinux candidate whose symlink
+escapes the boot filesystem rejects the entry rather than silently trying a
+lower-priority DTB.
 
 Failure to resolve a requested `fdt` or `fdtdir` rejects the entry. Only omitting
 both retains pocketboot's existing live-DTB fallback. Unlike lk2nd, a DTB
