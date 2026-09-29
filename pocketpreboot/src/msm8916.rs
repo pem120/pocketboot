@@ -190,13 +190,8 @@ fn prepare_fdt_inner(fdt: usize, payload: usize, payload_size: usize) -> Result<
     uart::writeln("msm8916: collect CPUs");
     let cpus = collect_cpus(&reader)?;
     // MSM8939 is booted on the big cluster (MPIDR 0x100); do not assume
-    // MPIDR 0. The primary is whichever listed CPU we are running on.
-    let primary_slot = cpus
-        .as_slice()
-        .iter()
-        .find(|cpu| cpu.reg == primary_reg)
-        .ok_or(Error::MissingCpu)?
-        .slot;
+    // MPIDR 0 there. The four-core kernel contract still requires it.
+    let primary_slot = cpus.primary_slot(primary_reg)?;
 
     // Finish all fallible DT work before releasing a secondary or touching
     // its ACC. Keep WFI idle; power collapse needs a separate resume protocol.
@@ -361,6 +356,20 @@ impl CpuList {
 
     fn as_slice(&self) -> &[CpuInfo] {
         &self.values[..self.len]
+    }
+
+    fn primary_slot(&self, primary_reg: u32) -> Result<u32> {
+        // The MSM8916 kernel patch and userspace handoff require physical CPU0.
+        // Do not silently expand that contract when enabling Ferrari's 0x100.
+        #[cfg(not(feature = "soc-msm8939"))]
+        if primary_reg != 0 {
+            return Err(Error::EntryState);
+        }
+        self.as_slice()
+            .iter()
+            .find(|cpu| cpu.reg == primary_reg)
+            .map(|cpu| cpu.slot)
+            .ok_or(Error::MissingCpu)
     }
 }
 
@@ -1847,6 +1856,26 @@ mod tests {
         for reg in invalid {
             assert!(cpu_slot_index(reg).is_err(), "reg {reg:#x}");
         }
+    }
+
+    #[test]
+    fn primary_selection_preserves_the_platform_contract() {
+        let dtb = msm8916_test_dtb(false);
+        let reader = Reader::new(&dtb).unwrap();
+        let cpus = collect_cpus(&reader).unwrap();
+        assert_eq!(
+            cpus.primary_slot(test_primary_reg()).unwrap(),
+            test_primary_slot()
+        );
+        for cpu in cpus.as_slice() {
+            if MAX_CPUS == 4 && cpu.reg != 0 {
+                assert!(matches!(cpus.primary_slot(cpu.reg), Err(Error::EntryState)));
+            } else {
+                assert_eq!(cpus.primary_slot(cpu.reg).unwrap(), cpu.slot);
+            }
+        }
+        assert!(cpus.primary_slot(0x10000).is_err());
+        assert!(CpuList::new().primary_slot(test_primary_reg()).is_err());
     }
 
     #[test]

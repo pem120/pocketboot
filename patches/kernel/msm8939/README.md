@@ -26,6 +26,14 @@ fixes that still apply (ignore disabled secure contexts, invalidate a newly
 programmed context). The FunctionFS reset-work backport and the inverted fault
 handler check are already upstream in this base and are intentionally absent.
 
+The IOMMU invalidation remains after context programming, matching the exercised
+MSM8916 patch. It is not proof that an active DMA master cannot use a stale
+translation between enable and invalidation. Simply hoisting it before the loop
+is not equivalent: the loop restores secure configuration and disables the old
+context, which could otherwise refill translations after an early invalidation.
+Master quiescence and a safe disable/invalidate/enable ordering remain a
+hardware-validation concern; do not treat the current patch as that proof.
+
 Enable `CONFIG_ARM64_SPIN_TABLE_KEXEC=y` in a 4 KiB-page arm64 kernel with
 `ARCH_QCOM`, `HOTPLUG_CPU`, and `KEXEC_CORE`. See the
 [MSM8916 patch README](../msm8916/README.md) for the parking contract,
