@@ -64,13 +64,23 @@ reclaims an occupied reservation only while ACC holds every secondary in reset.
 That branch previously left MSM8916 hardware unable to boot until the stale
 signatures were cleared. It now succeeds on Ferrari.
 
+### Concurrent load
+
+`stress-ng` runs in the destination and saturates all eight CPUs without
+problems. That is a load result, not a measured coherency result: it does not
+track shared-buffer handoffs, migrations or per-CPU work the way
+[`tools/smp-coherency.c`](../../tools/smp-coherency.c) does for the four-core
+MSM8916 method. Extending that tool to eight CPUs across both clusters would
+produce comparable evidence.
+
 Still outstanding, and required before calling this accepted:
 
 1. Destination display: the install's DTB carries the `xiaomi,ferrari-panel`
    placeholder, which lk2nd would normally resolve from the detected panel. It
    never sees this DTB, so no panel driver matches. See the display section
    below. Touch and USB state in the destination are unrecorded.
-2. A cross-cluster/coherency check in the destination, and repeated handoffs.
+2. A measured cross-cluster check and repeated handoffs; `stress-ng` saturation
+   is recorded above but is not that measurement.
 3. For the record: the live DTB/`/proc/iomem` review described below. Two boots
    exercised the page successfully, but preboot's own validation is not a
    substitute for reviewing the live memory map.
