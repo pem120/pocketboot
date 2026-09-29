@@ -26,15 +26,42 @@ bootloader-side kernel is the pinned `pem120/linux` `ferrari/lkml` build
 (`45add326…`, 7.3-rc4) inside this image; the destination postmarketOS runs an
 **older 7.0-based tree** with additional MSM8939 support.
 
+### Destination-side CPU evidence
+
+The destination kernel brings up every secondary from the parked page. Its own
+early boot log reports:
+
+```text
+smp: Bringing up secondary CPUs ...
+CPU1: Booted secondary processor 0x0000000101 [0x410fd031]
+CPU2: Booted secondary processor 0x0000000102 [0x410fd031]
+CPU3: Booted secondary processor 0x0000000103 [0x410fd031]
+CPU4: Booted secondary processor 0x0000000000 [0x410fd031]
+CPU5: Booted secondary processor 0x0000000001 [0x410fd031]
+CPU6: Booted secondary processor 0x0000000002 [0x410fd031]
+CPU7: Booted secondary processor 0x0000000003 [0x410fd031]
+smp: Brought up 1 node, 8 CPUs
+SMP: Total of 8 processors activated.
+CPU: All CPU(s) started at EL1
+```
+
+The seven secondary MPIDRs are exactly the dense slots this contract parks
+(`0x101`, `0x102`, `0x103`, `0`, `1`, `2`, `3`), and the primary (`0x100`) is
+logical CPU0. All CPUs report EL1, matching the contract's entry requirement.
+This is the cross-kernel handoff working end to end on hardware: the bootloader
+kernel parked secondaries in its owned page with acknowledgements, and a
+*different* kernel tree released them into its own startup path.
+
+It is a bring-up result, not a coherency soak: no cross-cluster workload, no
+migration or shared-memory check, and no repeated handoff has been recorded yet.
+
 Still outstanding, and required before calling this accepted:
 
-1. Destination-side evidence: `nproc`, destination `uname -r`, and the early
-   userspace/kernel CPU bring-up lines. Boot success alone is not an SMP
-   coherency result.
+1. Destination-side device state (display, touch, USB) and any errors observed
+   during handoff.
 2. Repeat boots, including the cold path that reclaims the retained resident
    page after reset.
-3. Device state in the destination (display, touch, USB) and any errors observed
-   during the handoff.
+3. A cross-cluster/coherency check in the destination, and repeated handoffs.
 4. For the record: the live DTB/`/proc/iomem` review described below. One boot
    exercised the page successfully, but preboot's own validation is not a
    substitute for reviewing the live memory map.
@@ -120,9 +147,10 @@ QEMU harness are regression evidence, not two-cluster hardware acceptance.
 
 ## Device acceptance, one boundary at a time
 
-Status of the sequence below after the reported boot: step 1 and step 2 are
-reported working; step 3 is unverified (no destination-side CPU evidence yet);
-step 4 has not been attempted.
+Status of the sequence below after the reported boot: steps 1 and 2 are
+reported working and step 3 has destination-side CPU evidence (all eight CPUs
+activated at EL1); step 3's device/coherency checks and step 4 have not been
+attempted.
 
 1. Reach pocketboot with eight CPUs online, display, touch, USB and storage.
    Capture the runtime DTB and full boot log; check the owned descriptor,
