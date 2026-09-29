@@ -1,11 +1,43 @@
 # Ferrari owned CPU-parking experiment
 
-This branch enables **unvalidated experimental CPU startup and handoff** for
+This branch enables **experimental CPU startup and handoff** for
 the Xiaomi Mi 4i (MSM8939). It stacks above the
 [recovery layer](https://github.com/samcday/pocketboot/pull/42), leaving the
 [no-preboot baseline](https://github.com/samcday/pocketboot/pull/37) available.
-Successful compilation is not permission to flash it. Coordinate transient
-boot tests with the device owner after the memory-map gate below.
+Successful compilation is not permission to flash it; coordinate transient boot
+tests with the device owner.
+
+## Reported hardware result (2026-09-29)
+
+The image built by CI for this branch boots postmarketOS on Ferrari. The owner
+flashed and booted this exact artifact:
+
+- CI run [36504432549](https://github.com/samcday/pocketboot/actions/runs/36504432549),
+branch `astra/ferrari-parking`, commit `ccad54103dea2405701caf338ee92527b3881b1b`.
+- `boot.img` SHA-256 `56cee5ca098c4ed66e3f845899cf7683ed7e738f991fdcfc051294723344caf0`
+  (5,089,296 bytes). Independently re-downloaded and hashed; the internals were
+  checked offline: pocketpreboot envelope at `0x80080000`, inner Linux 7.3-rc4
+  build, appended DTB with eight `pocketboot,msm8939-acc` methods and one
+  `pocketboot,spin-table-v1` reservation, resident `PBSPIN01` code in the
+  envelope.
+
+Two kernel trees are involved and both must be named in any record: the
+bootloader-side kernel is the pinned `pem120/linux` `ferrari/lkml` build
+(`45add326…`, 7.3-rc4) inside this image; the destination postmarketOS runs an
+**older 7.0-based tree** with additional MSM8939 support.
+
+Still outstanding, and required before calling this accepted:
+
+1. Destination-side evidence: `nproc`, destination `uname -r`, and the early
+   userspace/kernel CPU bring-up lines. Boot success alone is not an SMP
+   coherency result.
+2. Repeat boots, including the cold path that reclaims the retained resident
+   page after reset.
+3. Device state in the destination (display, touch, USB) and any errors observed
+   during the handoff.
+4. For the record: the live DTB/`/proc/iomem` review described below. One boot
+   exercised the page successfully, but preboot's own validation is not a
+   substitute for reviewing the live memory map.
 
 ## What changes
 
@@ -20,7 +52,8 @@ boot tests with the device owner after the memory-map gate below.
 - The kernel applies parking patch `0001` before the USB/IOMMU patches and
   enables `CONFIG_ARM64_SPIN_TABLE_KEXEC`. The ordinary four-core MSM8916
   configuration remains separate.
-- The candidate resident page is `[0x854ff000, 0x85500000)`, reserved `no-map`.
+- The resident page is `[0x854ff000, 0x85500000)`, reserved `no-map`; it has now
+  been exercised by the reported boot above.
   Dense slots use `Aff1 * 4 + Aff0` for `0..3, 0x100..0x103`. The physical
   primary is `0x100` (slot 4), not physical zero; Linux logical CPU0 is still
   the primary. DTB `boot_cpuid_phys` is metadata, not a measurement of MPIDR.
@@ -42,13 +75,14 @@ experiment as the default boot image to find out.
 
 ## Hardware gate: inspect the actual incoming memory map
 
-The candidate page lies between the source DTS framebuffer reservation ending
+The page lies between the source DTS framebuffer reservation ending
 at `0x85000000` and firmware reservations starting at `0x86000000`. The earlier
 Ferrari Linux log also places these ranges there. Neither replaces a complete
-live DTB and its FDT reservation map.
+live DTB and its FDT reservation map, and this review is still owed for the
+record even though the reported boot succeeded.
 
-Before testing this image, collect these from the **working baseline**, without
-changing its memory or clearing logs:
+Collect these from a device running this image (or the baseline), without
+clearing logs:
 
 ```sh
 adb -s <serial> pull /sys/firmware/fdt ferrari-live.dtb
@@ -59,8 +93,7 @@ dtc -I dtb -O dts -o ferrari-live.dts ferrari-live.dtb
 Confirm that the page is real DRAM and does not overlap any reservation,
 including FDT `/memreserve/` entries, disabled firmware carveouts, framebuffer,
 ramoops, or boot payloads. Preboot also validates RAM bounds and overlaps before
-writing. That check is a fail-closed diagnostic, not a substitute for reviewing
-the address before the first UART-free test.
+writing, which is what protected the reported boot.
 
 ## Validate and identify the artifact
 
@@ -87,7 +120,9 @@ QEMU harness are regression evidence, not two-cluster hardware acceptance.
 
 ## Device acceptance, one boundary at a time
 
-After agreeing on a recoverable transient-boot procedure with the owner:
+Status of the sequence below after the reported boot: step 1 and step 2 are
+reported working; step 3 is unverified (no destination-side CPU evidence yet);
+step 4 has not been attempted.
 
 1. Reach pocketboot with eight CPUs online, display, touch, USB and storage.
    Capture the runtime DTB and full boot log; check the owned descriptor,
@@ -104,6 +139,17 @@ After agreeing on a recoverable transient-boot procedure with the owner:
 Use [recovery diagnostics](recovery.md) to collect failures. Target-DTB ramoops
 layout preservation is still separate work, so retain the raw lk2nd recovery
 route and do not assume every destination-kernel crash is captured.
+
+## Known limitation: `fastboot boot` of these images
+
+Chainloading a Ferrari image with `fastboot boot ./boot.img` fails in current
+userspace with `decompress gzip kernel image: invalid gzip header`. The kernel
+section is a gzip stream with the DTB appended, and the userspace decompressor
+treats the trailer as another gzip member. Flashing is unaffected because lk2nd
+consumes the appended DTB itself. Making chainload tolerate the trailer would
+enable transient testing without flashing; booting a preboot-envelope image
+through `fastboot boot` is a separate question, since that path bypasses the
+preboot entry contract.
 
 ## Taking over from an existing lk2nd holding pen
 
