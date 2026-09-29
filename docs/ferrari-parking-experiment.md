@@ -33,6 +33,13 @@ memory placement, missing acknowledgements, and unsupported shutdown modes.
 Normal kexec requires every CPU online and the handoff on logical CPU0.
 Ordinary hotplug, suspend and crash-kexec are not supported by this contract.
 
+`panic=1` is intentional for this experiment, not a guarantee of retained
+evidence or a loop-free recovery. Whether reset preserves ramoops and returns
+to lk2nd fastboot depends on the installed firmware and boot policy; neither
+has been validated for this image. Before the first transient test, agree on
+how to interrupt a repeated panic/reboot and retrieve logs. Do not install the
+experiment as the default boot image to find out.
+
 ## Hardware gate: inspect the actual incoming memory map
 
 The candidate page lies between the source DTS framebuffer reservation ending

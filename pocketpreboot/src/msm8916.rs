@@ -258,6 +258,8 @@ fn prepare_fdt_inner(fdt: usize, payload: usize, payload_size: usize) -> Result<
             uart::write_str("msm8916: park acknowledgment timeout cpu");
             uart::write_hex64(cpu.reg as u64);
             uart::writeln("");
+            #[cfg(feature = "soc-msm8939")]
+            uart::writeln("msm8939: check L2 power, SCM/ACC startup and resident entry state");
             return Err(Error::StartupTimeout);
         }
         let entry_el =
