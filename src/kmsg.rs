@@ -41,7 +41,7 @@ pub(crate) fn init_tracing(cmdline: &KernelCommandLine) {
         // does not retain. Route it through the kernel log as well.
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
-            emergency_log(format_args!("panicked: {info}"));
+            emergency_log(info);
             previous(info);
         }));
     });
