@@ -35,6 +35,13 @@ snapshot at `/run/pocketboot/pstore`. Filenames and bytes are preserved; no
 source record is erased. A failed copy does not publish a partial snapshot,
 and an existing snapshot is never replaced.
 
+Capture is deliberately all-or-nothing for the exposed record set. Here
+"best-effort" means a capture error cannot prevent recovery startup; it does
+not mean publishing an incomplete snapshot. If capture fails, the originals
+remain under `/sys/fs/pstore` and individual records can still be pulled from
+there. Compressed `.enc.z` records are copied as opaque bytes, not decompressed
+or discarded by pocketboot.
+
 Once ADB is available, use the serial of the intended device:
 
 ```sh
