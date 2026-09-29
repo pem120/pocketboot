@@ -333,6 +333,37 @@ mod tests {
     }
 
     #[test]
+    fn a_later_copy_failure_keeps_the_complete_source_set_available() {
+        use std::io::Write;
+        let f = Fixture::new();
+        fs::write(f.source().join("console-ramoops-0"), b"console").unwrap();
+        fs::write(f.source().join("dmesg-ramoops-0.enc.z"), b"opaque").unwrap();
+        let mut attempted = 0;
+        let error = copy_store_using(&f.source(), &f.destination(), |input, output| {
+            attempted += 1;
+            if attempted == 1 {
+                io::copy(input, output)
+            } else {
+                output.write_all(b"partial")?;
+                Err(io::Error::other("injected later copy failure"))
+            }
+        })
+        .unwrap_err();
+        assert_eq!(attempted, 2);
+        assert!(error.to_string().contains("injected later copy failure"));
+        assert!(!f.destination().exists());
+        assert_eq!(fs::read_dir(&f.0).unwrap().count(), 1);
+        assert_eq!(
+            fs::read(f.source().join("console-ramoops-0")).unwrap(),
+            b"console"
+        );
+        assert_eq!(
+            fs::read(f.source().join("dmesg-ramoops-0.enc.z")).unwrap(),
+            b"opaque"
+        );
+    }
+
+    #[test]
     fn concurrent_destination_is_not_replaced() {
         let f = Fixture::new();
         fs::write(f.source().join("record"), b"new").unwrap();
